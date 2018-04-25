@@ -1,0 +1,90 @@
+FORWARD PASS:
+
+
+The assumptions are:
+x_t is a row vector of dim (1,256). Basically it is the input point at time t.
+x_t = X[t] where X is the entire input.
+
+Wxh is a matrix of dim (256,H)
+Whh is a matrix of dim (H,H)
+Who is a matrix of dim (H,256)
+
+
+let h1 = x_t * Wxh,
+    h2 = s_(t-1) * Whh                  
+    # Assume s_(t-1) is the value of s (explained later) at the previous time step.
+    # At t=1, s = vector of zeros
+    
+Then output of the hidden node at time t, represented by s_t is
+    s_t = tanh(h1+h2) or tanh(x_t * Wxh + s_(t-1) * Whh)
+    
+The output layer o_soft is
+    o_soft = softmax(o) or softmax(s_t * Who)
+    
+    
+BACKWARD
+
+Symbols, their dimensions and what they are.
+
+x_t -> Input at time t. (1,256)
+s_t -> Activation of hidden layer at time t. (1,H)
+
+Wxh -> Weight Matrix.   (256,H)
+Whh -> Weight Matrix.   (H,H)
+Who -> Weight Matrix.   (h,256)
+
+h1  = x_t * Wxh         (1,H)
+h2  = s_(t-1) * Whh     (1,H)
+h12 = h1 + h2           (1,H)
+s_t = tanh (h12)        (1,H)
+o   = s_t * Who         (1,C)
+o_soft = softmax(o)     (1,C)   (OUTPUT)
+
+E = cross_entropy loss
+
+*     Matrix Multiplication
+.*    Element Wise Multiplication
+<_,_> Dot product of two vectors
+_.T   Transpose
+
+1)
+dE/dWho = dE / dWho                      (H,C)
+Applying Chain Rule
+        = (dE / do_soft)(do_soft / do)(do / dWho)
+        = (do / dWho).T * ((dE / do_soft)*(do_soft / do))
+        = (s_t).T * ((dE / do_soft) * ( diagnolised(o_soft) - o_soft.T * o_soft )
+            (H,1) * (1,C) * (C,C)
+        
+       dE/d(o_soft_j) = -1/o_soft_j      if j==target
+                      = 0                otherwise
+       diagnolised(o_soft) -> A diagnol Matrix with Diagnol values as the elements of o_soft
+                           -> I * o_soft
+                           
+                           
+2)
+dE/dWxh = dE / dWxh                       (C,H)
+Applying Chain Rule
+        = (dE / do_soft)(do_soft / do)(do / ds_t)(d s_t / d h12 )((d h1/d Wxh) + (d h2/d Wxh))
+        =           (dE / do)         * Who.T    *(1- s_t .* s_t)( x_t         + (d h2/d Wxh))
+        =                                               (dE/dh12)( x_t         + (d h2/d Wxh))
+           
+        Let del_t = (dE/dh12)
+        &   del_i = Whh.T * (1 - s_i .* s_i) * del_(i+1)
+        
+        = x_t.T * del_t    + (d h2/d Wxh) * del_t
+        
+        d h2_t/d Wxh = x_(t-1).T * Whh.T * (1 - s_(t-1) .* s_(t-1) ) +     (d h2_(t-1)/ d Wxh)
+        
+        (d h2/d Wxh) * del_t = x_(t-1).T * Whh.T * (1 - s_(t-1) .* s_(t-1) ) * del_t   +    (d h2_(t-1)/ d Wxh)*del_t
+                             = x_(t-1).T * del_(t-1) + (d h2_(t-1)/ d Wxh)*del_t 
+        
+        which gives
+        
+       dE/dWxh = x_t.T * del_t + x_(t-1).T * del_(t-1) + x_(t-2).T * del_(t-2) .... x_(t-k) * del_(t-k)
+       
+       
+3) Similar to Above
+        dE/dWhh = s_t.T * del_t + s_(t-1).T * del_(t-1) + s_(t-2).T * del_(t-2) .... s_(t-k) * del_(t-k)
+        
+        (x is replaced with s. Rest are all the same)
+      
